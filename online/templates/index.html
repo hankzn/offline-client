@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>安全转账前端 · Intent 验签 & RawTx 广播</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;max-width:980px;margin:40px auto;padding:0 12px;}
+    h1{font-size:22px;margin:6px 0 16px}
+    textarea,input[type=text]{width:100%;padding:10px;font-family:monospace;font-size:14px}
+    .row{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:28px}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px}
+    .ok{color:#16a34a;font-weight:600}
+    .bad{color:#dc2626;font-weight:600}
+    .mono{font-family:monospace}
+    .hint{color:#6b7280}
+    button{padding:10px 14px;border-radius:10px;border:1px solid #111827;background:#111827;color:#fff;cursor:pointer}
+    table{border-collapse:collapse;width:100%;}
+    td,th{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
+    .big{font-size:18px;font-weight:700}
+    .flex{display:flex;gap:10px;align-items:center}
+    .muted{color:#9CA3AF;font-size:12px}
+    video{width:100%;max-height:260px;background:#000;border-radius:10px}
+    canvas{display:none}
+    .pill{display:inline-block;padding:2px 8px;border-radius:9999px;background:#eef2ff;color:#4338ca;font-size:12px}
+  </style>
+</head>
+<body>
+  <h1>安全转账前端 · Intent 验签 & RawTx 广播</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="card bad">
+        {{ messages[0] }}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="row">
+    <div class="card">
+      <h3>① 验证收款确认单（EIP-712 Payment Intent）</h3>
+      <p class="hint">把 <code>intent.json</code> 的内容粘贴到左侧，<code>intent.sig</code> 签名粘贴到右侧，点击验证。</p>
+      <form method="post" action="/verify_intent">
+        <div class="row">
+          <textarea name="intent_json" rows="10" placeholder='{"payee":"0x...","token":"0x...","amount":1000000,"chainId":1,"deadline":1234567890,"nonce":"0x...","memo":"..."}'></textarea>
+          <input name="intent_sig" type="text" placeholder="0x 签名 hex">
+        </div>
+        <button type="submit">验证 Intent</button>
+      </form>
+
+      {% if intent %}
+      <div class="row">
+        <div class="card">
+          <div>恢复地址 A（Account.recover）：<span class="mono big">{{ recovered }}</span></div>
+          <div>恢复地址 B（eth-keys）：<span class="mono big">{{ recovered_b }}</span></div>
+          <div class="{{ 'ok' if ok else 'bad' }}">双路径一致且匹配收款地址：{{ '是' if ok else '否' }}</div>
+          <hr>
+          <table>
+            <tr><th>字段</th><th>值</th></tr>
+            <tr><td>payee</td><td class="mono">{{ intent.payee }}</td></tr>
+            <tr><td>token</td><td class="mono">{{ intent.token }}</td></tr>
+            <tr><td>amount (最小单位)</td><td class="mono">{{ intent.amount }}</td></tr>
+            <tr><td>chainId</td><td class="mono">{{ intent.chainId }}</td></tr>
+            <tr><td>deadline</td><td class="mono">{{ intent.deadline }}</td></tr>
+            <tr><td>nonce</td><td class="mono">{{ intent.nonce }}</td></tr>
+            <tr><td>memo</td><td class="mono">{{ intent.memo }}</td></tr>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>② 广播已签名 RawTx（多 RPC 交叉）</h3>
+      <p class="hint">把离线机生成的 <code>rawtx.txt</code> 内容粘贴到下方，点击广播；也可填 TxHash 查询状态。</p>
+      <form method="post" action="/broadcast">
+        <textarea name="rawtx" rows="6" placeholder="0x..."></textarea>
+        <div style="margin-top:10px"><button type="submit">广播到 RPC_1 & RPC_2</button></div>
+      </form>
+      {% if broadcast_results %}
+      <div style="margin-top:12px">
+        <table>
+          <tr><th>RPC</th><th>URL</th><th>结果</th><th>响应</th></tr>
+          {% for (name, url, ok, resp) in broadcast_results %}
+          <tr>
+            <td>{{ name }}</td>
+            <td class="mono">{{ url }}</td>
+            <td class="{{ 'ok' if ok else 'bad' }}">{{ 'OK' if ok else 'FAIL' }}</td>
+            <td class="mono">{{ resp }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+
+      <hr>
+      <form method="post" action="/status">
+        <input name="txhash" type="text" placeholder="0x 交易哈希">
+        <div style="margin-top:10px"><button type="submit">查询状态（多 RPC）</button></div>
+      </form>
+      {% if status_results %}
+      <div style="margin-top:12px">
+        <table>
+          <tr><th>RPC</th><th>ok</th><th>block</th><th>status</th></tr>
+          {% for (name, ok, block, status) in status_results %}
+          <tr>
+            <td>{{ name }}</td>
+            <td class="{{ 'ok' if ok else 'bad' }}">{{ ok }}</td>
+            <td class="mono">{{ block }}</td>
+            <td class="mono">{{ status }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>③ 签名前预演（eth_call）</h3>
+      <p class="hint">把离线机生成的 <code>tx_human.json</code> 内容粘贴到下方，系统会在两个 RPC 上执行 <code>eth_call</code> 预演，验证成功/失败。</p>
+      <form method="post" action="/simulate">
+        <textarea name="tx_human_json" rows="10" placeholder='{"kind":"ERC20","from":"0x...","token":"0x...","to":"0x...","amount_smallest_unit":1000000,"data_hex":"0xa9059cbb...","value_wei":0,"chainId":1,"nonce":12,"gas":60000}'></textarea>
+        <div style="margin-top:10px"><button type="submit">在 RPC_1 & RPC_2 上预演</button></div>
+      </form>
+      {% if simulate_results %}
+      <div style="margin-top:12px">
+        <table>
+          <tr><th>RPC</th><th>ok</th><th>result</th></tr>
+          {% for (name, ok, res) in simulate_results %}
+          <tr>
+            <td>{{ name }}</td>
+            <td class="{{ 'ok' if ok else 'bad' }}">{{ ok }}</td>
+            <td class="mono">{{ res }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>④ 摄像头扫码广播 RawTx <span class="pill">实验性</span></h3>
+      <p class="hint">点击“开始扫码”，对准离线端生成的 <code>rawtx_qr.png</code>。识别出 0x... 后会自动填入并广播。</p>
+      <div class="flex">
+        <button id="startScan">开始扫码</button>
+        <button id="stopScan" disabled>停止</button>
+        <span class="muted">需要浏览器授权摄像头</span>
+      </div>
+      <video id="qrVideo" playsinline muted></video>
+      <canvas id="qrCanvas"></canvas>
+
+      <form id="qrBroadcastForm" method="post" action="/broadcast" style="display:none">
+        <textarea name="rawtx" id="qrRawtx"></textarea>
+      </form>
+      <div id="qrStatus" class="muted"></div>
+    </div>
+  </div>
+
+  <p class="hint">提示：请在环境变量 <code>RPC_URL_1</code> 和 <code>RPC_URL_2</code> 中配置你的节点。</p>
+
+  <!-- jsQR (MIT) - 用于二维码识别；在线端可走 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+  (function(){
+    const btnStart = document.getElementById('startScan');
+    const btnStop  = document.getElementById('stopScan');
+    const video    = document.getElementById('qrVideo');
+    const canvas   = document.getElementById('qrCanvas');
+    const statusEl = document.getElementById('qrStatus');
+    const rawtxEl  = document.getElementById('qrRawtx');
+    const form     = document.getElementById('qrBroadcastForm');
+
+    let stream = null, rafId = null;
+
+    function log(msg){ statusEl.textContent = msg; }
+
+    function stopScan(){
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      if (stream){
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      log('已停止');
+    }
+
+    async function startScan(){
+      try{
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        log('启动摄像头…');
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }});
+        video.srcObject = stream;
+        await video.play();
+        log('正在识别…将二维码对准取景框');
+        tick();
+      }catch(e){
+        log('无法访问摄像头：' + e);
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+      }
+    }
+
+    function tick(){
+      const w = video.videoWidth, h = video.videoHeight;
+      if (!w || !h){ rafId = requestAnimationFrame(tick); return; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const code = jsQR(imgData.data, w, h, { inversionAttempts: "attemptBoth" });
+      if (code && code.data){
+        const txt = code.data.trim();
+        if (/^0x[0-9a-fA-F]+$/.test(txt) && txt.length > 100){
+          log('识别到 RawTx，自动广播…');
+          stopScan();
+          rawtxEl.value = txt;
+          form.submit();
+          return;
+        } else {
+          log('已识别二维码，但内容不是 RawTx（0x…）');
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    btnStart.addEventListener('click', startScan);
+    btnStop.addEventListener('click', stopScan);
+  })();
+  </script>
+</body>
+</html>
