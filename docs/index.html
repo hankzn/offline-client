@@ -35,7 +35,7 @@
 
     <div id="pi_out" class="mono"></div>
 
-    <!-- 新增：Intent 的两个二维码，仅显示不保存 -->
+    <!-- Intent 的两个二维码，仅显示不保存 -->
     <div class="qgrid">
       <div>
         <div class="muted">intent.json</div>
@@ -96,11 +96,17 @@
     <pre id="tx_preview" class="mono"></pre>
     <div id="tx_out" class="mono"></div>
 
-    <div>
-      <h3>rawTx 二维码（用于在线端扫码广播）</h3>
-      <div id="qrcode"></div>
-      <p class="muted">二维码仅用于显示与扫码，不提供图片保存。</p>
+    <div class="qgrid">
+      <div>
+        <h3>rawTx 二维码（用于在线端扫码广播）</h3>
+        <div id="qrcode"></div>
+      </div>
+      <div>
+        <h3>tx_human.json 二维码（用于在线端预演）</h3>
+        <div id="qrcode_txhuman"></div>
+      </div>
     </div>
+    <p class="muted">二维码仅用于显示与扫码，不提供图片保存。</p>
 
     <div class="row">
       <button id="btn_save_raw" disabled>保存 rawtx.txt</button>
@@ -108,7 +114,7 @@
     </div>
   </section>
 
-  <!-- 本地离线库（不要用 CDN；提前下载到 docs/libs/） -->
+  <!-- 本地离线库（不要用 CDN；提前下载到 offline_web/libs/） -->
   <script src="./libs/ethers.umd.min.js"></script>
   <script src="./libs/qrcode.min.js"></script>
   <script src="./apps.js"></script>
