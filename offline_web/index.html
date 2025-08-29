@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>离线签名器 · Intent & EIP-1559</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <h1>离线签名器 · Intent & EIP-1559</h1>
+  <p class="muted">此页面无需联网，可在 Tails 上直接打开。建议在运行前先校验本文件与 JS 库的 SHA256。</p>
+
+  <section class="card">
+    <h2>一、生成并签名 Payment Intent（EIP-712）</h2>
+    <div class="grid">
+      <label>payee（收款地址）<input id="pi_payee" placeholder="0x..." /></label>
+      <label>token（0x0 为 ETH）<input id="pi_token" placeholder="0x0000000000000000000000000000000000000000" /></label>
+
+      <!-- 新：人类可读金额 + decimals + 自动换算最小单位 -->
+      <label>amount（人类可读，小数）<input id="pi_amount_human" type="text" placeholder="例如：1.23" /></label>
+      <label>decimals（代币精度）<input id="pi_decimals" type="number" value="18" min="0" max="36" /></label>
+      <label>amount（最小单位整数，自动计算）<input id="pi_amount_smallest" type="text" readonly placeholder="自动计算" /></label>
+
+      <label>chainId<input id="pi_chain" type="number" value="1" /></label>
+      <label>deadline（分钟）<input id="pi_deadline" type="number" value="15" /></label>
+      <label>nonce（留空自动随机）<input id="pi_nonce" placeholder="可留空" /></label>
+      <label>memo（可选）<input id="pi_memo" placeholder="Invoice #..." /></label>
+      <label>私钥（payee 的私钥）<input id="pi_priv" type="password" placeholder="0x..." /></label>
+    </div>
+    <div class="row">
+      <button id="btn_calc_smallest" class="ghost">计算最小单位</button>
+      <button id="btn_sign_intent">签名 Intent</button>
+      <span class="muted">（签名人将作为收款人地址；可用于下方一键填充 to）</span>
+    </div>
+    <div id="pi_out" class="mono"></div>
+    <div class="row">
+      <button id="btn_save_intent" disabled>保存 intent.json</button>
+      <button id="btn_save_sig" disabled>保存 intent.sig</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>二、离线签名交易（EIP-1559）</h2>
+    <div class="row">
+      <label class="inline"><input type="radio" name="txkind" value="ETH" checked> ETH 转账</label>
+      <label class="inline"><input type="radio" name="txkind" value="ERC20"> ERC-20 转账</label>
+      <button id="btn_lock_asset" class="warn">锁定金额/币种（不可逆）</button>
+      <span id="lock_badge" class="pill hidden">已锁定</span>
+    </div>
+
+    <div class="grid">
+      <label>from（发起地址，自动由私钥推导）<input id="tx_from" disabled placeholder="由私钥推导" /></label>
+
+      <!-- 收款地址 to -->
+      <label>to（收款地址）<input id="tx_to" placeholder="0x 收款地址" /></label>
+      <div class="row tiny-gap">
+        <button id="btn_fill_to_from_pi" class="ghost">用上方 payee 私钥推导并填入 to</button>
+        <span class="muted">（读取上方“私钥（payee 的私钥）”推导地址）</span>
+      </div>
+
+      <!-- 仅 ERC20 可见：token 合约 -->
+      <label id="label_token" class="hidden">token（代币合约）<input id="tx_token" placeholder="0xToken 合约" /></label>
+
+      <!-- 金额：两者仅显示其一 -->
+      <label id="label_amount_eth">amount（ETH 单位）<input id="tx_amount_eth" type="number" step="0.000000000000000001" value="0.0" /></label>
+      <label id="label_amount_erc" class="hidden">amount（最小单位整数）<input id="tx_amount_small" type="number" min="0" value="0" /></label>
+
+      <label>chainId<input id="tx_chain" type="number" value="1" /></label>
+      <label>nonce<input id="tx_nonce" type="number" value="0" /></label>
+      <label>gasLimit<input id="tx_gas" type="number" value="21000" /></label>
+      <label>maxFeePerGas（gwei）<input id="tx_maxfee" type="number" step="0.1" value="30" /></label>
+      <label>maxPriorityFeePerGas（gwei）<input id="tx_maxprio" type="number" step="0.1" value="1.5" /></label>
+      <label>私钥（from 的私钥）<input id="tx_priv" type="password" placeholder="0x..." /></label>
+    </div>
+
+    <div class="row">
+      <button id="btn_preview">预览六要素</button>
+      <button id="btn_sign_tx">签名交易</button>
+    </div>
+
+    <pre id="tx_preview" class="mono"></pre>
+    <div id="tx_out" class="mono"></div>
+
+    <div>
+      <h3>rawTx 二维码（用于在线端扫码广播）</h3>
+      <div id="qrcode"></div>
+      <p class="muted">二维码仅用于显示与扫码，不提供图片保存。</p>
+    </div>
+
+    <div class="row">
+      <button id="btn_save_raw" disabled>保存 rawtx.txt</button>
+      <button id="btn_save_human" disabled>保存 tx_human.json</button>
+    </div>
+  </section>
+
+  <!-- 本地离线库（不要用 CDN；提前下载到 offline_web/libs/） -->
+  <script src="./libs/ethers.umd.min.js"></script>
+  <script src="./libs/qrcode.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
