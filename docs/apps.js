@@ -1,4 +1,4 @@
-// offline_web/app.js —— 适配 ethers v6
+// docs/app.js —— 适配 ethers v6
 // 仅在离线环境运行；依赖本地 libs/ethers.umd.min.js (v6) 与 libs/qrcode.min.js
 
 (function(){
