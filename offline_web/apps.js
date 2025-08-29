@@ -1,4 +1,4 @@
-// offline_web/app.js  —— 适配 ethers v6
+// offline_web/app.js —— 适配 ethers v6
 // 仅在离线环境运行；依赖本地 libs/ethers.umd.min.js (v6) 与 libs/qrcode.min.js
 
 (function(){
@@ -19,8 +19,7 @@
       throw new Error(`小数位超过代币精度（decimals=${decimals}），请减少小数位或调整 decimals。`);
     }
     const s = (intPart + fracPart.slice(0, decimals)).replace(/^0+/, "") || "0";
-    // BigInt 校验
-    BigInt(s);
+    BigInt(s); // 校验
     return s;
   }
 
@@ -43,7 +42,7 @@
     setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
   };
 
-  // ========== 一、EIP-712 Payment Intent（含人类金额→最小单位自动换算） ==========
+  // ========== 一、EIP-712 Payment Intent（含人类金额→最小单位自动换算 + 二维码显示） ==========
   const piPayee   = $("pi_payee");
   const piToken   = $("pi_token");
   const piAmtH    = $("pi_amount_human");
@@ -88,7 +87,6 @@
     }
   }
   btnCalc.addEventListener("click", recalcSmallest);
-  // 不自动计算，按按钮可控：避免误触
   piAmtH.addEventListener("input", ()=>{});
   piDec.addEventListener("input", ()=>{});
 
@@ -108,7 +106,6 @@
       const decimals = Math.max(0, Math.min(36, parseInt(piDec.value || "18", 10)));
       if (piAmtH.value.trim()==="") throw new Error("请填写 amount（人类可读，小数）。");
       const amountSmallestStr = decimalToSmallestStr(piAmtH.value.trim(), decimals);
-      // 在 UI 中回显最小单位
       piAmtS.value = amountSmallestStr;
 
       // nonce
@@ -140,7 +137,7 @@
       const value = {
         payee,
         token,
-        amount: amountSmallestStr, // 关键：写入最小单位整数
+        amount: amountSmallestStr, // 最小单位整数
         chainId,
         deadline,
         nonce,
@@ -150,25 +147,38 @@
       // v6：signTypedData
       const sig = await wallet.signTypedData(domain, types, value);
 
-      // 渲染 & 允许保存
+      // 渲染文本
       const intentMsg = JSON.stringify(value, null, 2);
       outPI.textContent =
         "Signer (payee): " + wallet.address + "\n" +
         "Intent (message):\n" + intentMsg + "\n\n" +
         "Signature (hex):\n" + sig + "\n";
+
+      // 生成两个二维码（仅显示，不保存）
+      const qi = $("qrcode_intent");
+      const qs = $("qrcode_sig");
+      qi.innerHTML = ""; qs.innerHTML = "";
+      new QRCode(qi, { text: intentMsg, width: 220, height: 220,
+        colorDark:"#000000", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M });
+      new QRCode(qs, { text: sig, width: 220, height: 220,
+        colorDark:"#000000", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M });
+
+      // 允许保存文本文件（可选）
       btnSaveIntent.disabled = false;
       btnSaveSig.disabled = false;
-
       btnSaveIntent.onclick = ()=> saveBlob("intent.json", "application/json", intentMsg);
       btnSaveSig.onclick    = ()=> saveBlob("intent.sig", "text/plain", sig);
+
     }catch(e){
       outPI.textContent = "错误：" + e.message;
+      $("qrcode_intent").innerHTML = "";
+      $("qrcode_sig").innerHTML = "";
       btnSaveIntent.disabled = true;
       btnSaveSig.disabled = true;
     }
   });
 
-  // ========== 二、EIP-1559 交易签名 ==========
+  // ========== 二、EIP-1559 交易签名（保持已有：to 自动填充、金额/币种不可逆锁定、rawTx 二维码显示） ==========
   const kindRadios = document.getElementsByName("txkind");
   const txFrom = $("tx_from");
   const txPreview = $("tx_preview");
@@ -183,7 +193,6 @@
   const lockBadge = $("lock_badge");
   let assetLocked = false; // 一旦 true，不可逆
 
-  // 显示切换 ETH / ERC20
   const uiSwitch = ()=>{
     const kind = byName("txkind").value;
     const show = (el,vis)=> el.classList[vis?'remove':'add']('hidden');
@@ -195,7 +204,6 @@
   Array.from(kindRadios).forEach(r => r.addEventListener('change', ()=>{ if(!assetLocked) uiSwitch(); }));
   uiSwitch();
 
-  // 由私钥推导 from
   const updateFrom = ()=>{
     try{
       const priv = $("tx_priv").value.trim();
@@ -209,7 +217,6 @@
   };
   $("tx_priv").addEventListener('input', updateFrom);
 
-  // 一键填入 to：使用上方 payee 私钥推导的地址
   btnFillToFromPI.addEventListener('click', ()=>{
     try{
       const piPriv = $("pi_priv").value.trim();
@@ -221,9 +228,8 @@
     }
   });
 
-  // 资产锁定：锁定币种（ETH/ERC20 选择）、金额字段、token 合约，不可逆
   btnLockAsset.addEventListener('click', ()=>{
-    if (assetLocked) return; // 已锁定则忽略
+    if (assetLocked) return;
     const kind = byName("txkind").value;
     const hasEthAmt = $("tx_amount_eth").value.trim() !== "";
     const hasErcAmt = $("tx_amount_small").value.trim() !== "";
@@ -254,7 +260,7 @@
     if (kind === "ETH"){
       const to = $("tx_to").value.trim();
       const amountEth = $("tx_amount_eth").value || "0";
-      const valueWei = ethers.parseUnits(amountEth, 18); // v6
+      const valueWei = ethers.parseUnits(amountEth, 18);
       return {
         kind, from, to, value_wei: valueWei.toString(),
         amount_eth: amountEth,
@@ -267,8 +273,7 @@
       const token = $("tx_token").value.trim();
       const to = $("tx_to").value.trim();
       const amountSmall = $("tx_amount_small").value || "0";
-      // data = transfer(address,uint256)
-      const iface = new ethers.Interface(["function transfer(address to, uint256 amount)"]); // v6
+      const iface = new ethers.Interface(["function transfer(address to, uint256 amount)"]);
       const data = iface.encodeFunctionData("transfer", [to, amountSmall]);
       return {
         kind, from,
@@ -304,7 +309,7 @@
           chainId: h.chainId,
           nonce: h.nonce,
           to: h.to,
-          value: BigInt(h.value_wei), // v6 建议传 BigInt
+          value: BigInt(h.value_wei),
           gasLimit: BigInt(h.gas),
           maxFeePerGas: ethers.parseUnits(String(h.maxFeePerGas_gwei), "gwei"),
           maxPriorityFeePerGas: ethers.parseUnits(String(h.maxPriorityFeePerGas_gwei), "gwei"),
@@ -325,14 +330,13 @@
       }
 
       const raw = await wallet.signTransaction(tx);
-      const txhash = ethers.keccak256(raw); // v6
+      const txhash = ethers.keccak256(raw);
 
-      // 展示
       $("tx_out").textContent = "rawTx:\n" + raw + "\n\ntxHash:\n" + txhash + "\n";
       $("btn_save_raw").disabled = false;
       $("btn_save_human").disabled = false;
 
-      // 生成二维码（只显示，不保存图片）
+      // 生成 rawTx 二维码（仅显示，不保存）
       const qrDiv = document.getElementById("qrcode");
       qrDiv.innerHTML = "";
       new QRCode(qrDiv, {
@@ -343,7 +347,6 @@
         correctLevel: QRCode.CorrectLevel.M
       });
 
-      // 保存动作
       $("btn_save_raw").onclick = ()=> saveBlob("rawtx.txt", "text/plain", raw);
       $("btn_save_human").onclick = ()=> {
         const human = (h.kind==="ETH") ? {

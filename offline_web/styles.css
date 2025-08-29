@@ -9,11 +9,12 @@ button.warn{background:#7c2d12;border-color:#7c2d12}
 button.ghost{background:#fff;color:#111827}
 .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:24px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 .row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .inline{display:inline-flex;gap:6px;align-items:center;margin-right:18px}
 .muted{color:#6b7280}
 .mono{background:#0b1020;color:#e5e7eb;padding:12px;border-radius:8px;max-height:320px;overflow:auto}
 .hidden{display:none}
-#qrcode{margin-top:10px}
+#qrcode, #qrcode_intent, #qrcode_sig{margin-top:10px}
 .tiny-gap{gap:6px}
 .pill{display:inline-block;padding:2px 8px;border-radius:9999px;background:#eef2ff;color:#4338ca;font-size:12px}

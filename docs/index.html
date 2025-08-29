@@ -1,241 +1,348 @@
 <!doctype html>
 <html lang="zh">
 <head>
-  <meta charset="utf-8">
-  <title>安全转账前端 · Intent 验签 & RawTx 广播</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body{font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;max-width:980px;margin:40px auto;padding:0 12px;}
-    h1{font-size:22px;margin:6px 0 16px}
-    textarea,input[type=text]{width:100%;padding:10px;font-family:monospace;font-size:14px}
-    .row{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:28px}
-    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px}
-    .ok{color:#16a34a;font-weight:600}
-    .bad{color:#dc2626;font-weight:600}
-    .mono{font-family:monospace}
-    .hint{color:#6b7280}
-    button{padding:10px 14px;border-radius:10px;border:1px solid #111827;background:#111827;color:#fff;cursor:pointer}
-    table{border-collapse:collapse;width:100%;}
-    td,th{border-bottom:1px solid #e5e7eb;padding:8px;text-align:left}
-    .big{font-size:18px;font-weight:700}
-    .flex{display:flex;gap:10px;align-items:center}
-    .muted{color:#9CA3AF;font-size:12px}
-    video{width:100%;max-height:260px;background:#000;border-radius:10px}
-    canvas{display:none}
-    .pill{display:inline-block;padding:2px 8px;border-radius:9999px;background:#eef2ff;color:#4338ca;font-size:12px}
-  </style>
+<meta charset="utf-8" />
+<title>安全转账 · 在线端（验证 / 预演 / 广播 / 查询）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{--fg:#111827;--muted:#6b7280;--ok:#16a34a;--bad:#dc2626;--br:#e5e7eb;--bg:#fff}
+  *{box-sizing:border-box}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--fg);max-width:1080px;margin:24px auto;padding:0 14px}
+  h1{font-size:24px;margin:6px 0 18px}
+  h2{font-size:18px;margin:0 0 12px}
+  .card{border:1px solid var(--br);border-radius:12px;padding:16px;margin-bottom:20px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .col2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block}
+  input,textarea,button{font-size:14px}
+  input[type=text],textarea{width:100%;padding:10px;border:1px solid var(--br);border-radius:10px;font-family:monospace}
+  textarea{min-height:120px}
+  button{padding:10px 14px;border-radius:10px;border:1px solid var(--fg);background:var(--fg);color:#fff;cursor:pointer}
+  button.ghost{background:#fff;color:var(--fg)}
+  .muted{color:var(--muted)}
+  .mono{font-family:monospace}
+  .ok{color:var(--ok);font-weight:700}
+  .bad{color:var(--bad);font-weight:700}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;border-bottom:1px solid var(--br);text-align:left}
+  video{width:100%;max-height:260px;background:#000;border-radius:10px}
+  canvas{display:none}
+  .pill{display:inline-block;padding:2px 8px;border-radius:9999px;background:#eef2ff;color:#4338ca;font-size:12px}
+  .section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .small{font-size:12px}
+</style>
 </head>
 <body>
-  <h1>安全转账前端 · Intent 验签 & RawTx 广播</h1>
+<h1>安全转账 · 在线端（验证 / 预演 / 广播 / 查询）</h1>
 
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <div class="card bad">
-        {{ messages[0] }}
-      </div>
-    {% endif %}
-  {% endwith %}
+<div class="card">
+  <div class="section-title">
+    <h2>全局设置</h2>
+    <span class="muted small">本页不会接触私钥；请填写你的 RPC 节点</span>
+  </div>
+  <div class="col2">
+    <label>RPC_URL_1 <input id="rpc1" type="text" placeholder="https://mainnet.infura.io/v3/..." /></label>
+    <label>RPC_URL_2 <input id="rpc2" type="text" placeholder="https://eth-mainnet.g.alchemy.com/v2/..." /></label>
+  </div>
+</div>
 
+<!-- ① 验证收款确认单（EIP-712 Payment Intent） -->
+<div class="card">
+  <div class="section-title"><h2>① 验证 Payment Intent（EIP-712）</h2>
+    <span class="pill">手机二维码可扫码填充</span>
+  </div>
+  <div class="col2">
+    <label>intent.json
+      <textarea id="intent_json" placeholder='{"payee":"0x...","token":"0x...","amount":"1000000","chainId":1,"deadline":1700000000,"nonce":"0x...","memo":"..."}'></textarea>
+    </label>
+    <label>intent.sig
+      <input id="intent_sig" type="text" placeholder="0x 签名 hex" />
+    </label>
+  </div>
   <div class="row">
-    <div class="card">
-      <h3>① 验证收款确认单（EIP-712 Payment Intent）</h3>
-      <p class="hint">把 <code>intent.json</code> 的内容粘贴到左侧，<code>intent.sig</code> 签名粘贴到右侧，点击验证。</p>
-      <form method="post" action="/verify_intent">
-        <div class="row">
-          <textarea name="intent_json" rows="10" placeholder='{"payee":"0x...","token":"0x...","amount":1000000,"chainId":1,"deadline":1234567890,"nonce":"0x...","memo":"..."}'></textarea>
-          <input name="intent_sig" type="text" placeholder="0x 签名 hex">
-        </div>
-        <button type="submit">验证 Intent</button>
-      </form>
-
-      {% if intent %}
-      <div class="row">
-        <div class="card">
-          <div>恢复地址 A（Account.recover）：<span class="mono big">{{ recovered }}</span></div>
-          <div>恢复地址 B（eth-keys）：<span class="mono big">{{ recovered_b }}</span></div>
-          <div class="{{ 'ok' if ok else 'bad' }}">双路径一致且匹配收款地址：{{ '是' if ok else '否' }}</div>
-          <hr>
-          <table>
-            <tr><th>字段</th><th>值</th></tr>
-            <tr><td>payee</td><td class="mono">{{ intent.payee }}</td></tr>
-            <tr><td>token</td><td class="mono">{{ intent.token }}</td></tr>
-            <tr><td>amount (最小单位)</td><td class="mono">{{ intent.amount }}</td></tr>
-            <tr><td>chainId</td><td class="mono">{{ intent.chainId }}</td></tr>
-            <tr><td>deadline</td><td class="mono">{{ intent.deadline }}</td></tr>
-            <tr><td>nonce</td><td class="mono">{{ intent.nonce }}</td></tr>
-            <tr><td>memo</td><td class="mono">{{ intent.memo }}</td></tr>
-          </table>
-        </div>
-      </div>
-      {% endif %}
-    </div>
+    <button id="scan_intent_json" class="ghost">扫码 intent.json</button>
+    <button id="scan_intent_sig" class="ghost">扫码 intent.sig</button>
+    <button id="verify_intent">验证 Intent</button>
+    <span id="intent_status" class="muted"></span>
   </div>
 
-  <div class="row">
-    <div class="card">
-      <h3>② 广播已签名 RawTx（多 RPC 交叉）</h3>
-      <p class="hint">把离线机生成的 <code>rawtx.txt</code> 内容粘贴到下方，点击广播；也可填 TxHash 查询状态。</p>
-      <form method="post" action="/broadcast">
-        <textarea name="rawtx" rows="6" placeholder="0x..."></textarea>
-        <div style="margin-top:10px"><button type="submit">广播到 RPC_1 & RPC_2</button></div>
-      </form>
-      {% if broadcast_results %}
-      <div style="margin-top:12px">
-        <table>
-          <tr><th>RPC</th><th>URL</th><th>结果</th><th>响应</th></tr>
-          {% for (name, url, ok, resp) in broadcast_results %}
-          <tr>
-            <td>{{ name }}</td>
-            <td class="mono">{{ url }}</td>
-            <td class="{{ 'ok' if ok else 'bad' }}">{{ 'OK' if ok else 'FAIL' }}</td>
-            <td class="mono">{{ resp }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-      </div>
-      {% endif %}
+  <div id="intent_result" class="muted mono" style="margin-top:10px"></div>
 
-      <hr>
-      <form method="post" action="/status">
-        <input name="txhash" type="text" placeholder="0x 交易哈希">
-        <div style="margin-top:10px"><button type="submit">查询状态（多 RPC）</button></div>
-      </form>
-      {% if status_results %}
-      <div style="margin-top:12px">
-        <table>
-          <tr><th>RPC</th><th>ok</th><th>block</th><th>status</th></tr>
-          {% for (name, ok, block, status) in status_results %}
-          <tr>
-            <td>{{ name }}</td>
-            <td class="{{ 'ok' if ok else 'bad' }}">{{ ok }}</td>
-            <td class="mono">{{ block }}</td>
-            <td class="mono">{{ status }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-      </div>
-      {% endif %}
-    </div>
+  <!-- 摄像头容器（复用，按需显示） -->
+  <div id="cam_box" class="card" style="display:none;margin-top:12px">
+    <div class="row"><button id="stop_scan" class="ghost">停止扫码</button><span id="scan_status" class="muted"></span></div>
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
   </div>
+</div>
 
-  <div class="row">
-    <div class="card">
-      <h3>③ 签名前预演（eth_call）</h3>
-      <p class="hint">把离线机生成的 <code>tx_human.json</code> 内容粘贴到下方，系统会在两个 RPC 上执行 <code>eth_call</code> 预演，验证成功/失败。</p>
-      <form method="post" action="/simulate">
-        <textarea name="tx_human_json" rows="10" placeholder='{"kind":"ERC20","from":"0x...","token":"0x...","to":"0x...","amount_smallest_unit":1000000,"data_hex":"0xa9059cbb...","value_wei":0,"chainId":1,"nonce":12,"gas":60000}'></textarea>
-        <div style="margin-top:10px"><button type="submit">在 RPC_1 & RPC_2 上预演</button></div>
-      </form>
-      {% if simulate_results %}
-      <div style="margin-top:12px">
-        <table>
-          <tr><th>RPC</th><th>ok</th><th>result</th></tr>
-          {% for (name, ok, res) in simulate_results %}
-          <tr>
-            <td>{{ name }}</td>
-            <td class="{{ 'ok' if ok else 'bad' }}">{{ ok }}</td>
-            <td class="mono">{{ res }}</td>
-          </tr>
-          {% endfor %}
-        </table>
-      </div>
-      {% endif %}
-    </div>
+<!-- ② 广播 RawTx -->
+<div class="card">
+  <div class="section-title"><h2>② 广播已签名 RawTx（双 RPC）</h2>
+    <span class="pill">支持二维码扫码</span>
   </div>
-
+  <label>RawTx
+    <textarea id="rawtx" placeholder="0x..."></textarea>
+  </label>
   <div class="row">
-    <div class="card">
-      <h3>④ 摄像头扫码广播 RawTx <span class="pill">实验性</span></h3>
-      <p class="hint">点击“开始扫码”，对准离线端生成的 <code>rawtx_qr.png</code>。识别出 0x... 后会自动填入并广播。</p>
-      <div class="flex">
-        <button id="startScan">开始扫码</button>
-        <button id="stopScan" disabled>停止</button>
-        <span class="muted">需要浏览器授权摄像头</span>
-      </div>
-      <video id="qrVideo" playsinline muted></video>
-      <canvas id="qrCanvas"></canvas>
-
-      <form id="qrBroadcastForm" method="post" action="/broadcast" style="display:none">
-        <textarea name="rawtx" id="qrRawtx"></textarea>
-      </form>
-      <div id="qrStatus" class="muted"></div>
-    </div>
+    <button id="scan_rawtx" class="ghost">扫码 RawTx</button>
+    <button id="broadcast">广播</button>
+    <span id="broadcast_status" class="muted"></span>
   </div>
+  <div id="broadcast_table_box" style="margin-top:12px"></div>
+</div>
 
-  <p class="hint">提示：请在环境变量 <code>RPC_URL_1</code> 和 <code>RPC_URL_2</code> 中配置你的节点。</p>
+<!-- ③ 预演（eth_call） -->
+<div class="card">
+  <div class="section-title"><h2>③ 签名前预演（eth_call）</h2>
+    <span class="muted small">粘贴离线端生成的 tx_human.json</span>
+  </div>
+  <label>tx_human.json
+    <textarea id="tx_human" placeholder='{"kind":"ERC20","from":"0x...","token":"0x...","to":"0x...","amount_smallest_unit":1000000,"data_hex":"0xa9059cbb...","value_wei":0,"chainId":1,"nonce":12,"gas":60000}'></textarea>
+  </label>
+  <div class="row">
+    <button id="simulate">在两条 RPC 上预演</button>
+    <span id="simulate_status" class="muted"></span>
+  </div>
+  <div id="simulate_table_box" style="margin-top:12px"></div>
+</div>
 
-  <!-- jsQR (MIT) - 用于二维码识别；在线端可走 CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-  <script>
-  (function(){
-    const btnStart = document.getElementById('startScan');
-    const btnStop  = document.getElementById('stopScan');
-    const video    = document.getElementById('qrVideo');
-    const canvas   = document.getElementById('qrCanvas');
-    const statusEl = document.getElementById('qrStatus');
-    const rawtxEl  = document.getElementById('qrRawtx');
-    const form     = document.getElementById('qrBroadcastForm');
+<!-- ④ 查询交易状态 -->
+<div class="card">
+  <div class="section-title"><h2>④ 查询交易状态（双 RPC）</h2></div>
+  <div class="row">
+    <input id="txhash" type="text" placeholder="0x 交易哈希" style="flex:1" />
+    <button id="query">查询</button>
+    <span id="query_status" class="muted"></span>
+  </div>
+  <div id="query_table_box" style="margin-top:12px"></div>
+</div>
 
-    let stream = null, rafId = null;
+<!-- 依赖：ethers v6 + jsQR（在线端用 CDN 更方便） -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.11.1/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const log = (el, msg)=> el.textContent = msg;
 
-    function log(msg){ statusEl.textContent = msg; }
+  // 统一 JSON-RPC 调用
+  async function rpcCall(url, method, params) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {"content-type":"application/json"},
+      body: JSON.stringify({jsonrpc:"2.0", id: Date.now(), method, params})
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+    return j.result;
+  }
 
-    function stopScan(){
-      btnStart.disabled = false;
-      btnStop.disabled = true;
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = null;
-      if (stream){
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-      }
-      video.srcObject = null;
-      log('已停止');
+  function requireRPCs() {
+    const u1 = $("rpc1").value.trim();
+    const u2 = $("rpc2").value.trim();
+    if (!u1 || !u2) throw new Error("请先填写 RPC_URL_1 与 RPC_URL_2");
+    return [u1, u2];
+  }
+
+  // ========== 摄像头扫码（复用一套） ==========
+  let scanTarget = null; // "intent_json" | "intent_sig" | "rawtx"
+  let stream = null, rafId = null;
+
+  async function startScan(target) {
+    scanTarget = target;
+    $("cam_box").style.display = "";
+    log($("scan_status"), "启动摄像头…");
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+      $("video").srcObject = stream;
+      await $("video").play();
+      log($("scan_status"), "请将二维码对准取景框");
+      tick();
+    }catch(e){
+      log($("scan_status"), "无法打开摄像头：" + e.message);
     }
-
-    async function startScan(){
-      try{
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-        log('启动摄像头…');
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }});
-        video.srcObject = stream;
-        await video.play();
-        log('正在识别…将二维码对准取景框');
-        tick();
-      }catch(e){
-        log('无法访问摄像头：' + e);
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-      }
-    }
-
-    function tick(){
-      const w = video.videoWidth, h = video.videoHeight;
-      if (!w || !h){ rafId = requestAnimationFrame(tick); return; }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, w, h);
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const code = jsQR(imgData.data, w, h, { inversionAttempts: "attemptBoth" });
-      if (code && code.data){
-        const txt = code.data.trim();
-        if (/^0x[0-9a-fA-F]+$/.test(txt) && txt.length > 100){
-          log('识别到 RawTx，自动广播…');
-          stopScan();
-          rawtxEl.value = txt;
-          form.submit();
+  }
+  function stopScan() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+    $("video").srcObject = null;
+    $("cam_box").style.display = "none";
+    scanTarget = null;
+  }
+  function tick(){
+    const v = $("video");
+    if (!v.videoWidth){ rafId = requestAnimationFrame(tick); return; }
+    const c = $("canvas"), ctx = c.getContext("2d");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    ctx.drawImage(v, 0, 0, c.width, c.height);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    const code = jsQR(img.data, c.width, c.height, { inversionAttempts:"attemptBoth" });
+    if (code && code.data){
+      const txt = code.data.trim();
+      if (scanTarget === "rawtx") {
+        if (/^0x[0-9a-fA-F]+$/.test(txt) && txt.length > 100) {
+          $("rawtx").value = txt; stopScan();
+          log($("broadcast_status"), "已填入 RawTx（来自二维码）");
           return;
-        } else {
-          log('已识别二维码，但内容不是 RawTx（0x…）');
         }
+      } else if (scanTarget === "intent_sig") {
+        if (/^0x[0-9a-fA-F]+$/.test(txt) && txt.length > 100) {
+          $("intent_sig").value = txt; stopScan();
+          log($("intent_status"), "已填入 intent.sig（来自二维码）");
+          return;
+        }
+      } else if (scanTarget === "intent_json") {
+        try {
+          JSON.parse(txt);
+          $("intent_json").value = txt; stopScan();
+          log($("intent_status"), "已填入 intent.json（来自二维码）");
+          return;
+        } catch {}
       }
-      rafId = requestAnimationFrame(tick);
     }
+    rafId = requestAnimationFrame(tick);
+  }
+  $("stop_scan").onclick = stopScan;
+  $("scan_intent_json").onclick = ()=> startScan("intent_json");
+  $("scan_intent_sig").onclick  = ()=> startScan("intent_sig");
+  $("scan_rawtx").onclick       = ()=> startScan("rawtx");
 
-    btnStart.addEventListener('click', startScan);
-    btnStop.addEventListener('click', stopScan);
-  })();
-  </script>
+  // ========== ① 验证 Intent ==========
+  $("verify_intent").onclick = async ()=>{
+    const out = $("intent_result");
+    try{
+      const intent = JSON.parse($("intent_json").value || "{}");
+      const sig = ($("intent_sig").value || "").trim();
+      if (!sig) throw new Error("缺少签名（intent.sig）");
+      // 组装 EIP-712 域和类型（与离线端保持一致）
+      const domain = { name:"PaymentIntent", version:"1", chainId:Number(intent.chainId||0), verifyingContract:"0x0000000000000000000000000000000000000000" };
+      const types = { PaymentIntent:[
+        {name:"payee",type:"address"},
+        {name:"token",type:"address"},
+        {name:"amount",type:"uint256"},
+        {name:"chainId",type:"uint256"},
+        {name:"deadline",type:"uint64"},
+        {name:"nonce",type:"bytes32"},
+        {name:"memo",type:"string"},
+      ]};
+      // 用 v6 验证签名
+      const recovered = ethers.verifyTypedData(domain, types, intent, sig);
+      const ok = (recovered.toLowerCase() === String(intent.payee||"").toLowerCase());
+      log($("intent_status"), ok ? "验签通过" : "验签失败");
+      out.innerHTML =
+        `恢复地址：<span class="mono">${recovered}</span><br>`+
+        `<span class="${ok?'ok':'bad'}">${ok?'签名人与 payee 一致':'签名人与 payee 不一致'}</span><br><br>`+
+        `<b>Intent 内容：</b><br><pre>${escapeHtml(JSON.stringify(intent,null,2))}</pre>`;
+    }catch(e){
+      log($("intent_status"), "错误：" + e.message);
+      out.textContent = "";
+    }
+  };
+
+  // ========== ② 广播 RawTx ==========
+  $("broadcast").onclick = async ()=>{
+    const box = $("broadcast_table_box");
+    try{
+      const [u1,u2] = requireRPCs();
+      const raw = ($("rawtx").value||"").trim();
+      if (!/^0x[0-9a-fA-F]+$/.test(raw) || raw.length<=100) throw new Error("RawTx 格式不正确");
+      const txhash = ethers.keccak256(raw);
+      log($("broadcast_status"), "计算本地 txhash: " + txhash);
+      // 并发广播
+      const urls = [u1,u2];
+      const names = ["RPC_1","RPC_2"];
+      const results = await Promise.allSettled(urls.map(u => rpcCall(u,"eth_sendRawTransaction",[raw])));
+      // 渲染表格
+      const rows = results.map((r,i)=>{
+        if (r.status==="fulfilled") {
+          return `<tr><td>${names[i]}</td><td class="mono">${escapeHtml(urls[i])}</td><td class="ok">OK</td><td class="mono">${escapeHtml(r.value)}</td></tr>`;
+        } else {
+          return `<tr><td>${names[i]}</td><td class="mono">${escapeHtml(urls[i])}</td><td class="bad">FAIL</td><td class="mono">${escapeHtml(r.reason.message||String(r.reason))}</td></tr>`;
+        }
+      }).join("");
+      box.innerHTML = `
+        <div class="muted" style="margin:6px 0">本地计算 txhash：<span class="mono">${txhash}</span></div>
+        <table><tr><th>RPC</th><th>URL</th><th>结果</th><th>响应/错误</th></tr>${rows}</table>`;
+      // 自动填入查询栏
+      $("txhash").value = txhash;
+    }catch(e){
+      log($("broadcast_status"), "错误：" + e.message);
+      box.innerHTML = "";
+    }
+  };
+
+  // ========== ③ 预演（eth_call） ==========
+  $("simulate").onclick = async ()=>{
+    const box = $("simulate_table_box");
+    try{
+      const [u1,u2] = requireRPCs();
+      const h = JSON.parse($("tx_human").value||"{}");
+      const call = {
+        from: h.from,
+        to: h.kind==="ETH" ? h.to : h.token,
+        data: h.data_hex || "0x",
+        value: "0x" + BigInt(h.value_wei||0).toString(16)
+      };
+      const urls=[u1,u2], names=["RPC_1","RPC_2"];
+      const results = await Promise.allSettled(urls.map(u => rpcCall(u,"eth_call",[call,"latest"])));
+      const rows = results.map((r,i)=>{
+        if (r.status==="fulfilled") {
+          let val = r.value;
+          if (typeof val === "string" && val.startsWith("0x") && val.length===2) val = "(0x)";
+          return `<tr><td>${names[i]}</td><td class="ok">OK</td><td class="mono">${escapeHtml(String(val))}</td></tr>`;
+        } else {
+          return `<tr><td>${names[i]}</td><td class="bad">FAIL</td><td class="mono">${escapeHtml(r.reason.message||String(r.reason))}</td></tr>`;
+        }
+      }).join("");
+      box.innerHTML = `<table><tr><th>RPC</th><th>结果</th><th>返回/错误</th></tr>${rows}</table>`;
+      log($("simulate_status"), "预演完成");
+    }catch(e){
+      log($("simulate_status"), "错误：" + e.message);
+      box.innerHTML = "";
+    }
+  };
+
+  // ========== ④ 查询状态 ==========
+  $("query").onclick = async ()=>{
+    const box = $("query_table_box");
+    try{
+      const [u1,u2] = requireRPCs();
+      const th = ($("txhash").value||"").trim();
+      if (!/^0x[0-9a-fA-F]{64}$/.test(th)) throw new Error("txhash 格式不正确");
+      const urls=[u1,u2], names=["RPC_1","RPC_2"];
+      const results = await Promise.allSettled(urls.map(async (u)=>{
+        const r = await rpcCall(u,"eth_getTransactionReceipt",[th]);
+        if (!r) return { ok:true, block:null, status:null, raw:r };
+        return {
+          ok: true,
+          block: r.blockNumber ? parseInt(r.blockNumber, 16) : null,
+          status: r.status ? parseInt(r.status,16) : null,
+          raw: r
+        };
+      }));
+      const rows = results.map((r,i)=>{
+        if (r.status==="fulfilled"){
+          const v=r.value;
+          return `<tr><td>${names[i]}</td><td class="${v.ok?'ok':'bad'}">${v.ok}</td><td class="mono">${v.block??''}</td><td class="mono">${v.status??''}</td></tr>`;
+        }else{
+          return `<tr><td>${names[i]}</td><td class="bad">false</td><td class="mono"></td><td class="mono">${escapeHtml(r.reason.message||String(r.reason))}</td></tr>`;
+        }
+      }).join("");
+      box.innerHTML = `<table><tr><th>RPC</th><th>ok</th><th>block</th><th>status</th></tr>${rows}</table>`;
+      log($("query_status"), "查询完成");
+    }catch(e){
+      log($("query_status"), "错误：" + e.message);
+      box.innerHTML = "";
+    }
+  };
+
+  // HTML 转义
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+})();
+</script>
 </body>
 </html>

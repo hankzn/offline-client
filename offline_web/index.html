@@ -16,7 +16,7 @@
       <label>payee（收款地址）<input id="pi_payee" placeholder="0x..." /></label>
       <label>token（0x0 为 ETH）<input id="pi_token" placeholder="0x0000000000000000000000000000000000000000" /></label>
 
-      <!-- 新：人类可读金额 + decimals + 自动换算最小单位 -->
+      <!-- 人类可读金额 + decimals + 自动换算最小单位 -->
       <label>amount（人类可读，小数）<input id="pi_amount_human" type="text" placeholder="例如：1.23" /></label>
       <label>decimals（代币精度）<input id="pi_decimals" type="number" value="18" min="0" max="36" /></label>
       <label>amount（最小单位整数，自动计算）<input id="pi_amount_smallest" type="text" readonly placeholder="自动计算" /></label>
@@ -32,7 +32,22 @@
       <button id="btn_sign_intent">签名 Intent</button>
       <span class="muted">（签名人将作为收款人地址；可用于下方一键填充 to）</span>
     </div>
+
     <div id="pi_out" class="mono"></div>
+
+    <!-- 新增：Intent 的两个二维码，仅显示不保存 -->
+    <div class="qgrid">
+      <div>
+        <div class="muted">intent.json</div>
+        <div id="qrcode_intent"></div>
+      </div>
+      <div>
+        <div class="muted">intent.sig</div>
+        <div id="qrcode_sig"></div>
+      </div>
+    </div>
+    <p class="muted">以上二维码仅用于显示与扫码，不提供图片保存。</p>
+
     <div class="row">
       <button id="btn_save_intent" disabled>保存 intent.json</button>
       <button id="btn_save_sig" disabled>保存 intent.sig</button>
